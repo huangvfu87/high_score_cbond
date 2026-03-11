@@ -13,6 +13,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import warnings
 warnings.filterwarnings('ignore')
+import requests
+from akshare.utils.tqdm import get_tqdm
+
 
 # 页面配置
 st.set_page_config(
@@ -40,6 +43,113 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+
+
+def bond_zh_cov() -> pd.DataFrame:
+    """
+    东方财富网-数据中心-新股数据-可转债数据
+    https://data.eastmoney.com/kzz/default.html
+    :return: 可转债数据
+    :rtype: pandas.DataFrame
+    """
+    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+    params = {
+        "sortColumns": "PUBLIC_START_DATE",
+        "sortTypes": "-1",
+        "pageSize": "500",
+        "pageNumber": "1",
+        "reportName": "RPT_BOND_CB_LIST",
+        "columns": "ALL",
+        "quoteColumns": "f2~01~CONVERT_STOCK_CODE~CONVERT_STOCK_PRICE,"
+        "f235~10~SECURITY_CODE~TRANSFER_PRICE,f236~10~SECURITY_CODE~TRANSFER_VALUE,"
+        "f2~10~SECURITY_CODE~CURRENT_BOND_PRICE,f237~10~SECURITY_CODE~TRANSFER_PREMIUM_RATIO,"
+        "f239~10~SECURITY_CODE~RESALE_TRIG_PRICE,f240~10~SECURITY_CODE~REDEEM_TRIG_PRICE,"
+        "f23~01~CONVERT_STOCK_CODE~PBV_RATIO",
+        "source": "WEB",
+        "client": "WEB",
+    }
+    r = requests.get(url, params=params)
+    data_json = r.json()
+    total_page = data_json["result"]["pages"]
+    big_df = pd.DataFrame()
+    tqdm = get_tqdm()
+    for page in tqdm(range(1, total_page + 1), leave=False):
+        params.update({"pageNumber": page})
+        r = requests.get(url, params=params)
+        data_json = r.json()
+        temp_df = pd.DataFrame(data_json["result"]["data"])
+        big_df = pd.concat(objs=[big_df, temp_df], ignore_index=True)
+
+    field_name_mapping = {
+        "SECURITY_CODE": "债券代码",
+        "SECUCODE": "full_code",
+        "SECURITY_NAME_ABBR": "债券简称",
+        "LISTING_DATE": "上市时间",
+        "CONVERT_STOCK_CODE": "正股代码",
+        "RATING": "信用评级",
+        "ACTUAL_ISSUE_SCALE": "发行规模",
+        "ISSUE_PRICE": "申购上限",
+        "CORRECODE": "申购代码",
+        "PUBLIC_START_DATE": "申购日期",
+        "BOND_START_DATE": "中签号发布日",
+        "SECURITY_START_DATE": "原股东配售-股权登记日",
+        "SECURITY_SHORT_NAME": "正股简称",
+        "FIRST_PER_PREPLACING": "原股东配售-每股配售额",
+        "ONLINE_GENERAL_LWR": "中签率",
+        "CONVERT_STOCK_PRICE": "正股价",
+        "TRANSFER_PRICE": "转股价",
+        "TRANSFER_VALUE": "转股价值",
+        "CURRENT_BOND_PRICE": "债现价",
+        "TRANSFER_PREMIUM_RATIO": "转股溢价率"
+    }
+    big_df.rename(columns=field_name_mapping, inplace=True)
+    big_df = big_df[
+        [
+            "债券代码",
+            "full_code",
+            "债券简称",
+            "申购日期",
+            "申购代码",
+            "申购上限",
+            "正股代码",
+            "正股简称",
+            "正股价",
+            "转股价",
+            "转股价值",
+            "债现价",
+            "转股溢价率",
+            "原股东配售-股权登记日",
+            "原股东配售-每股配售额",
+            "发行规模",
+            "中签号发布日",
+            "中签率",
+            "上市时间",
+            "信用评级",
+        ]
+    ]
+
+    big_df["申购上限"] = pd.to_numeric(big_df["申购上限"], errors="coerce")
+    big_df["正股价"] = pd.to_numeric(big_df["正股价"], errors="coerce")
+    big_df["转股价"] = pd.to_numeric(big_df["转股价"], errors="coerce")
+    big_df["转股价值"] = pd.to_numeric(big_df["转股价值"], errors="coerce")
+    big_df["债现价"] = pd.to_numeric(big_df["债现价"], errors="coerce")
+    big_df["转股溢价率"] = pd.to_numeric(big_df["转股溢价率"], errors="coerce")
+    big_df["原股东配售-每股配售额"] = pd.to_numeric(
+        big_df["原股东配售-每股配售额"], errors="coerce"
+    )
+    big_df["发行规模"] = pd.to_numeric(big_df["发行规模"], errors="coerce")
+    big_df["中签率"] = pd.to_numeric(big_df["中签率"], errors="coerce")
+    big_df["中签号发布日"] = pd.to_datetime(
+        big_df["中签号发布日"], errors="coerce"
+    ).dt.date
+    big_df["上市时间"] = pd.to_datetime(big_df["上市时间"], errors="coerce").dt.date
+    big_df["申购日期"] = pd.to_datetime(big_df["申购日期"], errors="coerce").dt.date
+    big_df["原股东配售-股权登记日"] = pd.to_datetime(
+        big_df["原股东配售-股权登记日"], errors="coerce"
+    ).dt.date
+    big_df["债现价"] = big_df["债现价"].fillna(100)
+    return big_df
 
 
 class ConvertibleBondAnalyzer:
