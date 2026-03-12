@@ -319,7 +319,7 @@ class ConvertibleBondAnalyzer:
         return score
     
     def plot_kline_with_signals(self, df, bond_name, features):
-        """绘制K线图带技术指标 - 优化版"""
+        """绘制K线图带技术指标 - 中国式K线（阳线空心，阴线实心）"""
         
         # 过滤掉非交易日（成交量为0或NaN的日期）
         df_filtered = df[df['volume'] > 0].copy()
@@ -334,28 +334,29 @@ class ConvertibleBondAnalyzer:
             shared_xaxes=True
         )
         
-        # K线图 - 关键优化
+        # K线图 - 中国式样式（阳线空心红框，阴线实心绿色）
         fig.add_trace(
             go.Candlestick(
-                x=df_filtered.index,  # 使用索引而非日期，避免非交易日空白
+                x=df_filtered.index,
                 open=df_filtered['open'],
                 high=df_filtered['high'],
                 low=df_filtered['low'],
                 close=df_filtered['close'],
                 name='K线',
-                # 更鲜艳的颜色
-                increasing_line_color='#E74C3C',  # 亮红色
-                decreasing_line_color='#27AE60',  # 亮绿色
-                increasing_fillcolor='#E74C3C',
+                # 阳线：红色边框，白色填充（空心）
+                increasing_line_color='#E74C3C',
+                increasing_fillcolor='rgba(255, 255, 255, 0)',  # 透明填充 = 空心
+                # 阴线：绿色边框和填充（实心）
+                decreasing_line_color='#27AE60',
                 decreasing_fillcolor='#27AE60',
-                # 关键参数：控制K线粗细
-                line=dict(width=1),  # 影线宽度
-                whiskerwidth=0.5,    # 影线相对于实体的宽度比例
+                # K线边框宽度
+                line=dict(width=1.5),
+                whiskerwidth=0.5,
             ),
             row=1, col=1
         )
         
-        # 均线 - 使用索引
+        # 均线
         colors = {
             'ma5': '#FF6B6B', 
             'ma10': '#4ECDC4', 
@@ -375,7 +376,7 @@ class ConvertibleBondAnalyzer:
                     row=1, col=1
                 )
         
-        # 成交量 - 更鲜艳的颜色
+        # 成交量 - 阳线红色，阴线绿色
         colors_volume = ['#E74C3C' if row['close'] >= row['open'] else '#27AE60' 
                         for idx, row in df_filtered.iterrows()]
         fig.add_trace(
@@ -420,13 +421,15 @@ class ConvertibleBondAnalyzer:
             template='plotly_white',
             # 移除x轴的日期间隙
             xaxis=dict(
-                type='category',  # 关键：使用category类型避免日期间隙
+                type='category',
                 tickmode='linear',
                 tick0=0,
-                dtick=5  # 每5个交易日显示一个刻度
+                dtick=5
             ),
             xaxis2=dict(type='category'),
-            xaxis3=dict(type='category')
+            xaxis3=dict(type='category'),
+            # 减小K线间隙，让K线更粗
+            bargap=0.1
         )
         
         # 自定义x轴标签显示日期
