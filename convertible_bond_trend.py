@@ -320,6 +320,8 @@ class ConvertibleBondAnalyzer:
     
     def plot_kline_with_signals(self, df, bond_name, features):
         """绘制K线图带技术指标"""
+        x_vals = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+
         # 创建子图
         fig = make_subplots(
             rows=3, cols=1,
@@ -331,14 +333,16 @@ class ConvertibleBondAnalyzer:
         # K线图
         fig.add_trace(
             go.Candlestick(
-                x=df['date'],
+                x=x_vals,
                 open=df['open'],
                 high=df['high'],
                 low=df['low'],
                 close=df['close'],
                 name='K线',
                 increasing_line_color='#ef5350',
-                decreasing_line_color='#26a69a'
+                increasing_fillcolor='rgba(0,0,0,0)',  # 阳线空心
+                decreasing_line_color='#26a69a',
+                decreasing_fillcolor='#26a69a'         # 阴线实心
             ),
             row=1, col=1
         )
@@ -349,7 +353,7 @@ class ConvertibleBondAnalyzer:
             if ma in df.columns:
                 fig.add_trace(
                     go.Scatter(
-                        x=df['date'],
+                        x=x_vals,
                         y=df[ma],
                         name=ma.upper(),
                         line=dict(color=color, width=1.5),
@@ -363,7 +367,7 @@ class ConvertibleBondAnalyzer:
                         for idx, row in df.iterrows()]
         fig.add_trace(
             go.Bar(
-                x=df['date'],
+                x=x_vals,
                 y=df['volume'],
                 name='成交量',
                 marker_color=colors_volume,
@@ -381,7 +385,7 @@ class ConvertibleBondAnalyzer:
         
         fig.add_trace(
             go.Scatter(
-                x=df['date'],
+                x=x_vals,
                 y=rsi,
                 name='RSI',
                 line=dict(color='purple', width=2)
@@ -401,6 +405,13 @@ class ConvertibleBondAnalyzer:
             xaxis_rangeslider_visible=False,
             hovermode='x unified',
             template='plotly_white'
+        )
+
+        # 只显示有数据的日期（去除非交易日/无数据导致的时间轴空隙）
+        fig.update_xaxes(
+            type="category",
+            categoryorder="array",
+            categoryarray=x_vals.tolist(),
         )
         
         fig.update_xaxes(title_text="日期", row=3, col=1)
