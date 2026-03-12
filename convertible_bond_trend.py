@@ -160,6 +160,7 @@ class ConvertibleBondAnalyzer:
     def get_bond_list(_self):
         """获取可转债列表"""
         try:
+            ak.bond_zh_cov = bond_zh_cov
             bond_df = ak.bond_zh_cov()
             bond_df = bond_df[
                 (bond_df['债现价'] > 100) & 
