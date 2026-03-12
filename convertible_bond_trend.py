@@ -46,7 +46,7 @@ st.markdown("""
 
 
 
-def bond_zh_cov() -> pd.DataFrame:
+def _bond_zh_cov() -> pd.DataFrame:
     """
     东方财富网-数据中心-新股数据-可转债数据
     https://data.eastmoney.com/kzz/default.html
@@ -160,8 +160,8 @@ class ConvertibleBondAnalyzer:
     def get_bond_list(_self):
         """获取可转债列表"""
         try:
-            ak.bond_zh_cov = bond_zh_cov
-            bond_df = ak.bond_zh_cov()
+            # ak.bond_zh_cov = bond_zh_cov
+            bond_df = _bond_zh_cov()
             bond_df = bond_df[
                 (bond_df['债现价'] > 100) & 
                 (bond_df['债现价'] < 9999999)
