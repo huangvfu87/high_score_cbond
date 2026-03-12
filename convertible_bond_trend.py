@@ -319,188 +319,61 @@ class ConvertibleBondAnalyzer:
         return score
     
     def plot_kline_with_signals(self, df, bond_name, features):
-        """绘制K线图带技术指标 - 优化版（确保阴线实心）"""
-        
-        # 过滤掉非交易日
-        df_filtered = df[df['volume'] > 0].copy()
-        df_filtered = df_filtered.reset_index(drop=True)
-        
+        """绘制K线图带技术指标"""
         # 创建子图
         fig = make_subplots(
             rows=3, cols=1,
-            vertical_spacing=0.05,
-            row_heights=[0.65, 0.18, 0.17],
-            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI'),
-            shared_xaxes=True
+            vertical_spacing=0.03,
+            row_heights=[0.6, 0.2, 0.2],
+            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')
         )
         
-        # ========== 绘制K线（分开处理阳线和阴线）==========
-        
-        for idx, row in df_filtered.iterrows():
-            is_up = row['close'] >= row['open']
-            
-            if is_up:
-                # 阳线：红色空心
-                body_top = row['close']
-                body_bottom = row['open']
-                body_height = body_top - body_bottom if body_top > body_bottom else 0.02
-                
-                # 阳线实体（空心矩形）
-                fig.add_trace(
-                    go.Scatter(
-                        x=[idx-0.3, idx+0.3, idx+0.3, idx-0.3, idx-0.3],
-                        y=[body_bottom, body_bottom, body_top, body_top, body_bottom],
-                        fill=None,
-                        mode='lines',
-                        line=dict(color='#FF3333', width=2),
-                        showlegend=False,
-                        hoverinfo='skip'
-                    ),
-                    row=1, col=1
-                )
-                
-                # 上影线
-                if row['high'] > body_top:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[idx, idx],
-                            y=[body_top, row['high']],
-                            mode='lines',
-                            line=dict(color='#FF3333', width=1),
-                            showlegend=False,
-                            hoverinfo='skip'
-                        ),
-                        row=1, col=1
-                    )
-                
-                # 下影线
-                if row['low'] < body_bottom:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[idx, idx],
-                            y=[row['low'], body_bottom],
-                            mode='lines',
-                            line=dict(color='#FF3333', width=1),
-                            showlegend=False,
-                            hoverinfo='skip'
-                        ),
-                        row=1, col=1
-                    )
-            
-            else:
-                # 阴线：绿色实心
-                body_top = row['open']
-                body_bottom = row['close']
-                
-                # 阴线实体（实心矩形）
-                fig.add_trace(
-                    go.Scatter(
-                        x=[idx-0.3, idx+0.3, idx+0.3, idx-0.3, idx-0.3],
-                        y=[body_bottom, body_bottom, body_top, body_top, body_bottom],
-                        fill='toself',  # 关键：填充
-                        fillcolor='#00AA00',  # 绿色填充
-                        mode='lines',
-                        line=dict(color='#00AA00', width=2),
-                        showlegend=False,
-                        hoverinfo='skip'
-                    ),
-                    row=1, col=1
-                )
-                
-                # 上影线
-                if row['high'] > body_top:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[idx, idx],
-                            y=[body_top, row['high']],
-                            mode='lines',
-                            line=dict(color='#00AA00', width=1),
-                            showlegend=False,
-                            hoverinfo='skip'
-                        ),
-                        row=1, col=1
-                    )
-                
-                # 下影线
-                if row['low'] < body_bottom:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[idx, idx],
-                            y=[row['low'], body_bottom],
-                            mode='lines',
-                            line=dict(color='#00AA00', width=1),
-                            showlegend=False,
-                            hoverinfo='skip'
-                        ),
-                        row=1, col=1
-                    )
-        
-        # 添加图例标记（只是为了显示图例）
+        # K线图
         fig.add_trace(
-            go.Scatter(
-                x=[None], y=[None],
-                mode='markers',
-                marker=dict(size=10, color='#FF3333', symbol='square', line=dict(width=2, color='#FF3333')),
-                showlegend=True,
-                name='阳线'
+            go.Candlestick(
+                x=df['date'],
+                open=df['open'],
+                high=df['high'],
+                low=df['low'],
+                close=df['close'],
+                name='K线',
+                increasing_line_color='#ef5350',
+                decreasing_line_color='#26a69a'
             ),
             row=1, col=1
         )
         
-        fig.add_trace(
-            go.Scatter(
-                x=[None], y=[None],
-                mode='markers',
-                marker=dict(size=10, color='#00AA00', symbol='square'),
-                showlegend=True,
-                name='阴线'
-            ),
-            row=1, col=1
-        )
-        
-        # ========== 均线 ==========
-        ma_configs = [
-            ('ma5', 'MA5', '#FF6B6B', 1.8),
-            ('ma10', 'MA10', '#4ECDC4', 1.8),
-            ('ma20', 'MA20', '#FFB74D', 1.8),
-            ('ma30', 'MA30', '#9575CD', 1.8)
-        ]
-        
-        for ma_col, ma_name, color, width in ma_configs:
-            if ma_col in df_filtered.columns:
+        # 均线
+        colors = {'ma5': '#FF6B6B', 'ma10': '#4ECDC4', 'ma20': '#45B7D1', 'ma30': '#FFA07A'}
+        for ma, color in colors.items():
+            if ma in df.columns:
                 fig.add_trace(
                     go.Scatter(
-                        x=df_filtered.index,
-                        y=df_filtered[ma_col],
-                        name=ma_name,
-                        line=dict(color=color, width=width),
-                        opacity=0.7,
-                        mode='lines'
+                        x=df['date'],
+                        y=df[ma],
+                        name=ma.upper(),
+                        line=dict(color=color, width=1.5),
+                        opacity=0.7
                     ),
                     row=1, col=1
                 )
         
-        # ========== 成交量 ==========
-        colors_volume = ['#FF3333' if row['close'] >= row['open'] else '#00AA00' 
-                        for idx, row in df_filtered.iterrows()]
-        
+        # 成交量
+        colors_volume = ['#ef5350' if row['close'] >= row['open'] else '#26a69a' 
+                        for idx, row in df.iterrows()]
         fig.add_trace(
             go.Bar(
-                x=df_filtered.index,
-                y=df_filtered['volume'],
+                x=df['date'],
+                y=df['volume'],
                 name='成交量',
-                marker=dict(
-                    color=colors_volume,
-                    opacity=0.5,
-                    line=dict(width=0)
-                ),
-                showlegend=True
+                marker_color=colors_volume,
+                opacity=0.5
             ),
             row=2, col=1
         )
         
-        # ========== RSI ==========
-        delta = df_filtered['close'].diff()
+        # RSI
+        delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
@@ -508,81 +381,36 @@ class ConvertibleBondAnalyzer:
         
         fig.add_trace(
             go.Scatter(
-                x=df_filtered.index,
+                x=df['date'],
                 y=rsi,
                 name='RSI',
-                line=dict(color='#9C27B0', width=2.5),
-                fill='tozeroy',
-                fillcolor='rgba(156, 39, 176, 0.15)'
+                line=dict(color='purple', width=2)
             ),
             row=3, col=1
         )
         
         # RSI参考线
-        fig.add_hline(y=70, line_dash="dash", line_color="#FF3333", 
-                    opacity=0.6, line_width=1.5, row=3, col=1,
-                    annotation_text="超买70", annotation_position="right")
-        fig.add_hline(y=30, line_dash="dash", line_color="#00AA00", 
-                    opacity=0.6, line_width=1.5, row=3, col=1,
-                    annotation_text="超卖30", annotation_position="right")
-        fig.add_hline(y=50, line_dash="dot", line_color="gray", 
-                    opacity=0.4, line_width=1, row=3, col=1)
+        fig.add_hline(y=70, line_dash="dash", line_color="red", opacity=0.5, row=3, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5, row=3, col=1)
+        fig.add_hline(y=50, line_dash="dash", line_color="gray", opacity=0.3, row=3, col=1)
         
-        # ========== 布局设置 ==========
+        # 布局
         fig.update_layout(
-            height=1000,
+            height=800,
             showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1,
-                font=dict(size=11)
-            ),
             xaxis_rangeslider_visible=False,
             hovermode='x unified',
-            template='plotly_white',
-            plot_bgcolor='#FAFAFA',
-            paper_bgcolor='white',
-            font=dict(family="Microsoft YaHei, Arial", size=12),
-            # 去除非交易日间隙
-            xaxis=dict(type='category', showgrid=True, gridcolor='#E8E8E8'),
-            xaxis2=dict(type='category', showgrid=True, gridcolor='#E8E8E8'),
-            xaxis3=dict(type='category', showgrid=True, gridcolor='#E8E8E8'),
-            margin=dict(l=70, r=70, t=80, b=70)
+            template='plotly_white'
         )
         
-        # X轴日期标签
-        total_days = len(df_filtered)
-        if total_days <= 60:
-            step = 5
-        elif total_days <= 120:
-            step = 10
-        else:
-            step = 15
-        
-        tickvals = list(range(0, total_days, step))
-        ticktext = [df_filtered.iloc[i]['date'].strftime('%m-%d') 
-                    if i < total_days else '' for i in tickvals]
-        
-        fig.update_xaxes(
-            tickvals=tickvals,
-            ticktext=ticktext,
-            tickangle=0,
-            row=3, col=1
-        )
-        
-        # Y轴设置
-        fig.update_yaxes(title_text="价格", row=1, col=1, 
-                        gridcolor='#E8E8E8', gridwidth=1)
-        fig.update_yaxes(title_text="成交量", row=2, col=1, 
-                        gridcolor='#E8E8E8', gridwidth=1)
-        fig.update_yaxes(title_text="RSI", row=3, col=1, 
-                        gridcolor='#E8E8E8', gridwidth=1, range=[0, 100])
+        fig.update_xaxes(title_text="日期", row=3, col=1)
+        fig.update_yaxes(title_text="价格", row=1, col=1)
+        fig.update_yaxes(title_text="成交量", row=2, col=1)
+        fig.update_yaxes(title_text="RSI", row=3, col=1)
         
         return fig
-    
+
+
 # 主应用
 def main():
     st.markdown('<p class="main-header">📈 可转债趋势识别系统</p>', unsafe_allow_html=True)
