@@ -320,7 +320,16 @@ class ConvertibleBondAnalyzer:
         return score
     
     def plot_kline_with_signals(self, df, bond_name, features):
-        """绘制K线图带技术指标"""
+        """绘制K线图带技术指标（去除非交易日，使K线图更紧凑）"""
+
+        # 对非交易日去除处理
+        # 确保日期按序排列，并且只包含交易日
+        df = df.reset_index(drop=True).copy()
+        df = df.sort_values(by='date').reset_index(drop=True)
+
+        x_axis = list(range(len(df)))  # 用整数序列做x轴，使K线紧凑展示
+        date_labels = df['date']
+
         # 创建子图
         fig = make_subplots(
             rows=3, cols=1,
@@ -332,7 +341,7 @@ class ConvertibleBondAnalyzer:
         # K线图
         fig.add_trace(
             go.Candlestick(
-                x=df['date'],
+                x=x_axis,
                 open=df['open'],
                 high=df['high'],
                 low=df['low'],
@@ -350,7 +359,7 @@ class ConvertibleBondAnalyzer:
             if ma in df.columns:
                 fig.add_trace(
                     go.Scatter(
-                        x=df['date'],
+                        x=x_axis,
                         y=df[ma],
                         name=ma.upper(),
                         line=dict(color=color, width=1.5),
@@ -364,7 +373,7 @@ class ConvertibleBondAnalyzer:
                         for idx, row in df.iterrows()]
         fig.add_trace(
             go.Bar(
-                x=df['date'],
+                x=x_axis,
                 y=df['volume'],
                 name='成交量',
                 marker_color=colors_volume,
@@ -382,20 +391,20 @@ class ConvertibleBondAnalyzer:
         
         fig.add_trace(
             go.Scatter(
-                x=df['date'],
+                x=x_axis,
                 y=rsi,
                 name='RSI',
                 line=dict(color='purple', width=2)
             ),
             row=3, col=1
         )
-        
+
         # RSI参考线
         fig.add_hline(y=70, line_dash="dash", line_color="red", opacity=0.5, row=3, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5, row=3, col=1)
         fig.add_hline(y=50, line_dash="dash", line_color="gray", opacity=0.3, row=3, col=1)
         
-        # 布局
+        # 布局 
         fig.update_layout(
             height=800,
             showlegend=True,
@@ -403,7 +412,15 @@ class ConvertibleBondAnalyzer:
             hovermode='x unified',
             template='plotly_white'
         )
-        
+
+        # 设置xtick为实际交易日
+        for i in range(1, 4):
+            fig.update_xaxes(
+                ticks="outside",
+                tickvals=x_axis[::max(len(x_axis)//10,1)],
+                ticktext=[date_labels.iloc[idx].strftime('%Y-%m-%d') if hasattr(date_labels.iloc[idx], 'strftime') else str(date_labels.iloc[idx]) for idx in x_axis[::max(len(x_axis)//10,1)]],
+                row=i, col=1
+            )
         fig.update_xaxes(title_text="日期", row=3, col=1)
         fig.update_yaxes(title_text="价格", row=1, col=1)
         fig.update_yaxes(title_text="成交量", row=2, col=1)
