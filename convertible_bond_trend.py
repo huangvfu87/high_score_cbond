@@ -319,82 +319,31 @@ class ConvertibleBondAnalyzer:
         
         return score
     
-    def plot_kline_with_signals(self, df, bond_name, features):
-        """绘制K线图带技术指标，并过滤非交易日或数据为0的日期，K线跌为绿色实体、涨为红色空心"""
-        import numpy as np
-
-        # 过滤掉非交易日或收盘/开盘/最高/最低/成交量为0或空的数据
-        valid_idx = (
-            (df['close'] > 0) &
-            (df['open'] > 0) &
-            (df['high'] > 0) &
-            (df['low'] > 0) &
-            (df['volume'] > 0) &
-            (~df['close'].isnull()) &
-            (~df['open'].isnull()) &
-            (~df['high'].isnull()) &
-            (~df['low'].isnull()) &
-            (~df['volume'].isnull())
-        )
-        df = df.loc[valid_idx].reset_index(drop=True)
-
+   def plot_kline_with_signals(self, df, bond_name, features):
+        """绘制K线图带技术指标"""
+        # 创建子图
         fig = make_subplots(
             rows=3, cols=1,
             vertical_spacing=0.03,
             row_heights=[0.6, 0.2, 0.2],
             subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')
         )
-
-        # K线图（通过Scatter模拟实体/空心K线）
-        for idx, row in df.iterrows():
-            k_color = '#26a69a' if row['close'] < row['open'] else '#ef5350'
-            # 实体参数
-            x0 = row['date']
-            y0, y1 = sorted([row['open'], row['close']])
-            width = 0.4  # 柱体粗细
-            # 绘制实体（跌为绿色填充，涨为空心）
-            if row['close'] < row['open']:
-                # 实体-下跌绿色填充
-                fig.add_trace(
-                    go.Bar(
-                        x=[x0], y=[y1 - y0], base=y0,
-                        width=[width],
-                        marker_color=k_color,
-                        marker_line_color=k_color,
-                        marker_line_width=1,
-                        opacity=1,
-                        showlegend=False,
-                        hoverinfo='skip'
-                    ),
-                    row=1, col=1
-                )
-            else:
-                # 实体-上涨空心
-                fig.add_trace(
-                    go.Bar(
-                        x=[x0], y=[y1 - y0], base=y0,
-                        width=[width],
-                        marker_color='rgba(255,255,255,0)',  # 无填充
-                        marker_line_color=k_color,
-                        marker_line_width=2,
-                        opacity=1,
-                        showlegend=False,
-                        hoverinfo='skip'
-                    ),
-                    row=1, col=1
-                )
-            # 绘制影线（上下影线为Scatter）
-            fig.add_trace(
-                go.Scatter(
-                    x=[x0, x0], y=[row['low'], row['high']],
-                    mode='lines',
-                    line=dict(color=k_color, width=1),
-                    showlegend=False,
-                    hoverinfo='skip'
-                ),
-                row=1, col=1
-            )
-
+        
+        # K线图
+        fig.add_trace(
+            go.Candlestick(
+                x=df['date'],
+                open=df['open'],
+                high=df['high'],
+                low=df['low'],
+                close=df['close'],
+                name='K线',
+                increasing_line_color='#ef5350',
+                decreasing_line_color='#26a69a'
+            ),
+            row=1, col=1
+        )
+        
         # 均线
         colors = {'ma5': '#FF6B6B', 'ma10': '#4ECDC4', 'ma20': '#45B7D1', 'ma30': '#FFA07A'}
         for ma, color in colors.items():
@@ -409,9 +358,10 @@ class ConvertibleBondAnalyzer:
                     ),
                     row=1, col=1
                 )
-
+        
         # 成交量
-        colors_volume = ['#ef5350' if row['close'] >= row['open'] else '#26a69a' for idx, row in df.iterrows()]
+        colors_volume = ['#ef5350' if row['close'] >= row['open'] else '#26a69a' 
+                        for idx, row in df.iterrows()]
         fig.add_trace(
             go.Bar(
                 x=df['date'],
@@ -422,14 +372,14 @@ class ConvertibleBondAnalyzer:
             ),
             row=2, col=1
         )
-
+        
         # RSI
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
-
+        
         fig.add_trace(
             go.Scatter(
                 x=df['date'],
@@ -439,12 +389,12 @@ class ConvertibleBondAnalyzer:
             ),
             row=3, col=1
         )
-
+        
         # RSI参考线
         fig.add_hline(y=70, line_dash="dash", line_color="red", opacity=0.5, row=3, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5, row=3, col=1)
         fig.add_hline(y=50, line_dash="dash", line_color="gray", opacity=0.3, row=3, col=1)
-
+        
         # 布局
         fig.update_layout(
             height=800,
@@ -453,15 +403,14 @@ class ConvertibleBondAnalyzer:
             hovermode='x unified',
             template='plotly_white'
         )
-
+        
         fig.update_xaxes(title_text="日期", row=3, col=1)
         fig.update_yaxes(title_text="价格", row=1, col=1)
         fig.update_yaxes(title_text="成交量", row=2, col=1)
         fig.update_yaxes(title_text="RSI", row=3, col=1)
-
+        
         return fig
-
-
+        
 # 主应用
 def main():
     st.markdown('<p class="main-header">📈 可转债趋势识别系统</p>', unsafe_allow_html=True)
