@@ -319,7 +319,7 @@ class ConvertibleBondAnalyzer:
         
         return score
     
-   def plot_kline_with_signals(self, df, bond_name, features):
+    def plot_kline_with_signals(self, df, bond_name, features):
         """绘制K线图带技术指标"""
         # 创建子图
         fig = make_subplots(
@@ -410,7 +410,7 @@ class ConvertibleBondAnalyzer:
         fig.update_yaxes(title_text="RSI", row=3, col=1)
         
         return fig
-        
+
 # 主应用
 def main():
     st.markdown('<p class="main-header">📈 可转债趋势识别系统</p>', unsafe_allow_html=True)
