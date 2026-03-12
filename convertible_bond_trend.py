@@ -319,61 +319,78 @@ class ConvertibleBondAnalyzer:
         return score
     
     def plot_kline_with_signals(self, df, bond_name, features):
-        """绘制K线图带技术指标"""
+        """绘制K线图带技术指标 - 优化版"""
+        
+        # 过滤掉非交易日（成交量为0或NaN的日期）
+        df_filtered = df[df['volume'] > 0].copy()
+        df_filtered = df_filtered.reset_index(drop=True)
+        
         # 创建子图
         fig = make_subplots(
             rows=3, cols=1,
             vertical_spacing=0.03,
             row_heights=[0.6, 0.2, 0.2],
-            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')
+            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI'),
+            shared_xaxes=True
         )
         
-        # K线图
+        # K线图 - 关键优化
         fig.add_trace(
             go.Candlestick(
-                x=df['date'],
-                open=df['open'],
-                high=df['high'],
-                low=df['low'],
-                close=df['close'],
+                x=df_filtered.index,  # 使用索引而非日期，避免非交易日空白
+                open=df_filtered['open'],
+                high=df_filtered['high'],
+                low=df_filtered['low'],
+                close=df_filtered['close'],
                 name='K线',
-                increasing_line_color='#ef5350',
-                decreasing_line_color='#26a69a'
+                # 更鲜艳的颜色
+                increasing_line_color='#E74C3C',  # 亮红色
+                decreasing_line_color='#27AE60',  # 亮绿色
+                increasing_fillcolor='#E74C3C',
+                decreasing_fillcolor='#27AE60',
+                # 关键参数：控制K线粗细
+                line=dict(width=1),  # 影线宽度
+                whiskerwidth=0.5,    # 影线相对于实体的宽度比例
             ),
             row=1, col=1
         )
         
-        # 均线
-        colors = {'ma5': '#FF6B6B', 'ma10': '#4ECDC4', 'ma20': '#45B7D1', 'ma30': '#FFA07A'}
+        # 均线 - 使用索引
+        colors = {
+            'ma5': '#FF6B6B', 
+            'ma10': '#4ECDC4', 
+            'ma20': '#45B7D1', 
+            'ma30': '#FFA07A'
+        }
         for ma, color in colors.items():
-            if ma in df.columns:
+            if ma in df_filtered.columns:
                 fig.add_trace(
                     go.Scatter(
-                        x=df['date'],
-                        y=df[ma],
+                        x=df_filtered.index,
+                        y=df_filtered[ma],
                         name=ma.upper(),
                         line=dict(color=color, width=1.5),
-                        opacity=0.7
+                        opacity=0.8
                     ),
                     row=1, col=1
                 )
         
-        # 成交量
-        colors_volume = ['#ef5350' if row['close'] >= row['open'] else '#26a69a' 
-                        for idx, row in df.iterrows()]
+        # 成交量 - 更鲜艳的颜色
+        colors_volume = ['#E74C3C' if row['close'] >= row['open'] else '#27AE60' 
+                        for idx, row in df_filtered.iterrows()]
         fig.add_trace(
             go.Bar(
-                x=df['date'],
-                y=df['volume'],
+                x=df_filtered.index,
+                y=df_filtered['volume'],
                 name='成交量',
                 marker_color=colors_volume,
-                opacity=0.5
+                opacity=0.6
             ),
             row=2, col=1
         )
         
         # RSI
-        delta = df['close'].diff()
+        delta = df_filtered['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
@@ -381,10 +398,10 @@ class ConvertibleBondAnalyzer:
         
         fig.add_trace(
             go.Scatter(
-                x=df['date'],
+                x=df_filtered.index,
                 y=rsi,
                 name='RSI',
-                line=dict(color='purple', width=2)
+                line=dict(color='#9B59B6', width=2)
             ),
             row=3, col=1
         )
@@ -394,13 +411,34 @@ class ConvertibleBondAnalyzer:
         fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5, row=3, col=1)
         fig.add_hline(y=50, line_dash="dash", line_color="gray", opacity=0.3, row=3, col=1)
         
-        # 布局
+        # 布局优化
         fig.update_layout(
-            height=800,
+            height=900,
             showlegend=True,
             xaxis_rangeslider_visible=False,
             hovermode='x unified',
-            template='plotly_white'
+            template='plotly_white',
+            # 移除x轴的日期间隙
+            xaxis=dict(
+                type='category',  # 关键：使用category类型避免日期间隙
+                tickmode='linear',
+                tick0=0,
+                dtick=5  # 每5个交易日显示一个刻度
+            ),
+            xaxis2=dict(type='category'),
+            xaxis3=dict(type='category')
+        )
+        
+        # 自定义x轴标签显示日期
+        tickvals = list(range(0, len(df_filtered), max(1, len(df_filtered)//10)))
+        ticktext = [df_filtered.iloc[i]['date'].strftime('%Y-%m-%d') if i < len(df_filtered) else '' 
+                    for i in tickvals]
+        
+        fig.update_xaxes(
+            tickvals=tickvals,
+            ticktext=ticktext,
+            tickangle=45,
+            row=3, col=1
         )
         
         fig.update_xaxes(title_text="日期", row=3, col=1)
