@@ -321,268 +321,175 @@ class ConvertibleBondAnalyzer:
     
 
     def plot_kline_with_signals(self, df, bond_name, features):
-        """终极兼容版：同花顺风格K线图（适配所有Plotly版本，无hover解析错误）"""
-        # 数据预处理+空值保护
-        df = df.reset_index(drop=True).copy()
-        df = df.sort_values(by='date').reset_index(drop=True)
-        if df.empty:
-            fig = go.Figure()
-            fig.update_layout(
-                title_text=f"{bond_name} 暂无数据", 
-                template='plotly_white',
-                height=600
-            )
-            return fig
-    
-        # 生成支持布尔索引的x轴
+        """优化：绘制同花顺风格K线图（正确区分阴阳线，避免全部为阳线）"""
+        import numpy as np
+        import plotly.graph_objs as go
+        from plotly.subplots import make_subplots
+
+        # 处理非交易日，确保顺序与索引
+        df = df.copy().sort_values(by='date').reset_index(drop=True)
         x_axis = np.arange(len(df))
-        # 统一日期格式为字符串（避免hover解析异常）
-        if pd.api.types.is_datetime64_any_dtype(df['date']):
-            date_labels = df['date'].dt.strftime('%Y-%m-%d').tolist()
-        else:
-            date_labels = df['date'].astype(str).tolist()
-    
-        # ========== 基础配色方案 ==========
-        up_color = '#E62E2E'          # 阳线主色
-        up_border_color = '#C02020'   # 阳线边框
-        down_color = '#00965E'        # 阴线主色
+        date_labels = df['date']
+
+        up_color = '#FF4500'
+        down_color = '#008000'
         ma_colors = {
-            'ma5': '#FF9500',    # 5日均线
-            'ma10': '#0066CC',   # 10日均线
-            'ma20': '#9933FF',   # 20日均线
-            'ma30': '#00CC66'    # 30日均线
+            'ma5': '#F7A35C',
+            'ma10': '#7CB5EC',
+            'ma20': '#4ECDC4',
+            'ma30': '#90EE90'
         }
-    
-        # 创建子图（仅保留基础参数）
+
+        # 创建三行子图
         fig = make_subplots(
             rows=3, cols=1,
-            vertical_spacing=0.015,
-            row_heights=[0.7, 0.15, 0.15],
+            vertical_spacing=0.02,
+            row_heights=[0.65, 0.15, 0.2],
             subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')
         )
-    
-        # 优化子图标题（兼容旧版）
-        for i in range(len(fig.layout.annotations)):
+
+        # 标题样式调整
+        for i, title in enumerate([f'{bond_name} K线图', '成交量', 'RSI']):
             fig.layout.annotations[i].update(
-                font=dict(size=16, family='Arial', color='#2C3E50', weight='bold'),
-                bgcolor='rgba(255,255,255,0.8)'
+                font=dict(size=16, family='Arial', color='#333333')
             )
-        
-        # ========== K线绘制（移除所有hover模板，改用全局hover） ==========
-        up_mask = df['close'] >= df['open']
-        down_mask = df['close'] < df['open']
-    
-        # 阳线（移除自定义hovertemplate）
+
+        # ========== K线绘制：单trace做对齐，利用increasing/decreasing属性，确保阴阳线分色 ==========
         fig.add_trace(
             go.Candlestick(
-                x=x_axis[up_mask],
-                open=df.loc[up_mask, 'open'],
-                high=df.loc[up_mask, 'high'],
-                low=df.loc[up_mask, 'low'],
-                close=df.loc[up_mask, 'close'],
-                name='阳线',
-                increasing_line_color=up_border_color,
-                increasing_fillcolor='rgba(255,255,255,0)',  # 空心
-                increasing_line_width=2,
-                showlegend=False
-            ),
-            row=1, col=1
-        )
-    
-        # 阴线（移除自定义hovertemplate）
-        fig.add_trace(
-            go.Candlestick(
-                x=x_axis[down_mask],
-                open=df.loc[down_mask, 'open'],
-                high=df.loc[down_mask, 'high'],
-                low=df.loc[down_mask, 'low'],
-                close=df.loc[down_mask, 'close'],
-                name='阴线',
+                x=x_axis,
+                open=df['open'],
+                high=df['high'],
+                low=df['low'],
+                close=df['close'],
+                name='K线',
+                increasing_line_color=up_color,
                 decreasing_line_color=down_color,
-                decreasing_fillcolor=down_color,             # 实心
-                decreasing_line_width=1.8,
+                increasing_fillcolor='rgba(0,0,0,0)',  # 阳线空心
+                decreasing_fillcolor=down_color,      # 阴线实心
+                increasing_line_width=1.5,
+                decreasing_line_width=1.5,
                 showlegend=False
             ),
             row=1, col=1
         )
-        
-        # ========== 均线绘制（移除f-string+hovertemplate） ==========
+
+        # ========== 均线绘制 ==========
         for ma, color in ma_colors.items():
             if ma in df.columns:
                 fig.add_trace(
                     go.Scatter(
                         x=x_axis,
                         y=df[ma],
-                        name=ma.upper(),  # 仅保留名称，hover自动显示
-                        line=dict(
-                            color=color,
-                            width=1.8
-                        ),
-                        opacity=0.85,
+                        name=ma.upper(),
+                        line=dict(color=color, width=1.2),
+                        opacity=0.8,
                         showlegend=True
                     ),
                     row=1, col=1
                 )
-        
-        # ========== 成交量绘制（简化hover） ==========
-        volume_colors = [up_color if row['close'] >= row['open'] else down_color 
+
+        # ========== 成交量 =============
+        colors_volume = [up_color if row['close'] >= row['open'] else down_color
                         for idx, row in df.iterrows()]
-        
         fig.add_trace(
             go.Bar(
                 x=x_axis,
                 y=df['volume'],
                 name='成交量',
-                marker=dict(
-                    color=volume_colors,
-                    line=dict(width=0.5, color='#E0E0E0')
-                ),
-                opacity=0.8,
+                marker_color=colors_volume,
+                opacity=0.7,
                 showlegend=False
             ),
             row=2, col=1
         )
-        
-        # ========== RSI绘制（简化hover） ==========
+
+        # ========== RSI =============
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         loss = loss.replace(0, 1e-8)
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
-    
+
         fig.add_trace(
             go.Scatter(
                 x=x_axis,
                 y=rsi,
                 name='RSI',
-                line=dict(
-                    color='#800080',
-                    width=2
-                ),
+                line=dict(color='#800080', width=1.8),
                 fill='tonexty',
-                fillcolor='rgba(128, 0, 128, 0.15)',
+                fillcolor='rgba(128, 0, 128, 0.1)',
                 showlegend=False
             ),
             row=3, col=1
         )
-    
-        # RSI阈值背景
-        fig.add_hrect(
-            y0=70, y1=100,
-            fillcolor='rgba(230, 46, 46, 0.1)',
-            line_width=0,
-            opacity=0.6,
-            row=3, col=1
-        )
-        fig.add_hrect(
-            y0=0, y1=30,
-            fillcolor='rgba(0, 150, 94, 0.1)',
-            line_width=0,
-            opacity=0.6,
-            row=3, col=1
-        )
-    
-        # RSI参考线
-        fig.add_hline(y=70, line_dash="dash", line_color="#E62E2E", line_width=1.2, opacity=0.8, row=3, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="#00965E", line_width=1.2, opacity=0.8, row=3, col=1)
-        fig.add_hline(y=50, line_dash="dot", line_color="#888888", line_width=1, opacity=0.6, row=3, col=1)
-        
-        # ========== 全局布局（核心：用默认hover替代自定义模板） ==========
+
+        fig.add_hline(y=70, line_dash="dash", line_color="#FF0000", line_width=1, opacity=0.7, row=3, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color="#00FF00", line_width=1, opacity=0.7, row=3, col=1)
+        fig.add_hline(y=50, line_dash="dot", line_color="#888888", line_width=1, opacity=0.5, row=3, col=1)
+
+        # ======== 布局优化 ==========
         fig.update_layout(
-            height=900,
+            height=850,
             showlegend=True,
             legend=dict(
                 orientation='h',
                 yanchor='bottom',
-                y=1.01,
+                y=1.02,
                 xanchor='right',
                 x=1,
-                font=dict(size=11, family='Arial', weight='500'),
-                bgcolor='rgba(255,255,255,0.95)',
-                bordercolor='#E0E0E0',
-                borderwidth=1
-            ),
-            xaxis_rangeslider_visible=False,
-            # 关键：使用全局统一hover，避免自定义模板解析错误
-            hovermode='x unified',
-            hoverlabel=dict(
-                bgcolor='rgba(255,255,255,0.95)',
-                bordercolor='#DDDDDD',
                 font=dict(size=10, family='Arial')
             ),
+            xaxis_rangeslider_visible=False,
+            hovermode='x unified',
             template='plotly_white',
-            plot_bgcolor='rgba(248,249,250,1)',
+            plot_bgcolor='rgba(245,245,245,0.9)',
             paper_bgcolor='white',
-            margin=dict(l=60, r=30, t=70, b=40),
-            font=dict(family='Arial', color='#2C3E50')
+            margin=dict(l=50, r=30, t=60, b=40)
         )
-    
-        # ========== X/Y轴优化（修复日期标签） ==========
-        tick_interval = max(len(x_axis)//15, 1) if len(x_axis) > 15 else 1
-        tick_indices = list(range(len(x_axis)))[::tick_interval]
-        tick_texts = [date_labels[idx] for idx in tick_indices]
-        
+
+        # ========= X/Y轴样式 =========
+        tick_interval = max(len(x_axis)//12, 1)
         for i in range(1, 4):
             fig.update_xaxes(
                 ticks="outside",
-                ticklen=6,
-                tickwidth=1.2,
                 tickvals=x_axis[::tick_interval],
-                ticktext=tick_texts,
-                tickfont=dict(size=10, family='Arial', color='#666666'),
-                gridcolor='rgba(220,220,220,0.3)',
-                gridwidth=0.8,
-                linecolor='#E0E0E0',
-                linewidth=1,
+                ticktext=[
+                    date_labels.iloc[idx].strftime('%Y-%m-%d')
+                    if hasattr(date_labels.iloc[idx], 'strftime')
+                    else str(date_labels.iloc[idx])
+                    for idx in range(len(x_axis))[::tick_interval]
+                ],
+                tickfont=dict(size=9, family='Arial'),
+                gridcolor='rgba(200,200,200,0.2)',
                 row=i, col=1
             )
-        
-        # Y轴设置
+
         fig.update_yaxes(
             title_text="价格",
-            title_font=dict(size=12, family='Arial', color='#2C3E50', weight='bold'),
-            tickfont=dict(size=10, family='Arial', color='#666666'),
-            gridcolor='rgba(220,220,220,0.3)',
-            gridwidth=0.8,
-            linecolor='#E0E0E0',
-            linewidth=1,
-            ticks="outside",
-            ticklen=6,
-            tickwidth=1.2,
+            title_font=dict(size=11, family='Arial', color='#333'),
+            tickfont=dict(size=9, family='Arial'),
+            gridcolor='rgba(200,200,200,0.2)',
             row=1, col=1
         )
-    
         fig.update_yaxes(
             title_text="成交量",
-            title_font=dict(size=11, family='Arial', color='#2C3E50', weight='bold'),
-            tickfont=dict(size=9, family='Arial', color='#666666'),
-            gridcolor='rgba(220,220,220,0.2)',
-            gridwidth=0.8,
-            linecolor='#E0E0E0',
-            linewidth=1,
-            ticks="outside",
-            ticklen=5,
-            tickwidth=1,
+            title_font=dict(size=11, family='Arial', color='#333'),
+            tickfont=dict(size=9, family='Arial'),
+            gridcolor='rgba(200,200,200,0.2)',
             row=2, col=1
         )
-    
         fig.update_yaxes(
-            title_text="RSI (14)",
-            title_font=dict(size=11, family='Arial', color='#2C3E50', weight='bold'),
-            tickfont=dict(size=9, family='Arial', color='#666666'),
-            gridcolor='rgba(220,220,220,0.2)',
-            gridwidth=0.8,
-            linecolor='#E0E0E0',
-            linewidth=1,
-            ticks="outside",
-            ticklen=5,
-            tickwidth=1,
+            title_text="RSI",
+            title_font=dict(size=11, family='Arial', color='#333'),
+            tickfont=dict(size=9, family='Arial'),
+            gridcolor='rgba(200,200,200,0.2)',
             range=[0, 100],
             row=3, col=1
         )
-        
         return fig
+
 
 # 主应用
 def main():
