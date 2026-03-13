@@ -340,21 +340,23 @@ class ConvertibleBondAnalyzer:
             'ma30': '#90EE90'   # 30日均线（浅绿色）
         }
 
-        # 创建子图（优化行高比例，更符合同花顺布局）
+        # 创建子图（修复title_font参数错误，优化行高比例）
         fig = make_subplots(
             rows=3, cols=1,
             vertical_spacing=0.02,  # 减小垂直间距，更紧凑
             row_heights=[0.65, 0.15, 0.2],  # 优化行高占比
-            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI'),
-            # 统一标题样式
-            title_font=dict(size=16, family='SimHei', color='#333333')
+            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')  # 移除不兼容的title_font参数
         )
+
+        # ========== 统一设置子图标题样式（替代原title_font） ==========
+        for i, title in enumerate([f'{bond_name} K线图', '成交量', 'RSI']):
+            fig.layout.annotations[i].update(
+                font=dict(size=16, family='Arial', color='#333333')  # 改用Arial兼容所有环境
+            )
         
         # ========== 同花顺风格K线绘制（核心修改） ==========
         # 拆分阳线/阴线数据，分别设置样式
-        # 阳线：close >= open，空心（fill='none'），边框红
         up_mask = df['close'] >= df['open']
-        # 阴线：close < open，实心（fill='full'），填充绿
         down_mask = df['close'] < df['open']
 
         # 添加阳线
@@ -456,7 +458,7 @@ class ConvertibleBondAnalyzer:
                 y=1.02,                # 图例位置在K线图上方
                 xanchor='right',       # 图例右对齐
                 x=1,
-                font=dict(size=10, family='SimHei')  # 图例字体优化
+                font=dict(size=10, family='Arial')  # 改用Arial兼容所有环境
             ),
             xaxis_rangeslider_visible=False,  # 隐藏range slider，更简洁
             hovermode='x unified',            # 统一x轴悬停提示
@@ -479,7 +481,7 @@ class ConvertibleBondAnalyzer:
                     else str(date_labels.iloc[idx]) 
                     for idx in x_axis[::tick_interval]
                 ],
-                tickfont=dict(size=9, family='SimHei'),  # 刻度字体优化
+                tickfont=dict(size=9, family='Arial'),  # 改用Arial兼容所有环境
                 gridcolor='rgba(200,200,200,0.2)',       # 网格线浅灰，不干扰
                 row=i, col=1
             )
@@ -487,22 +489,22 @@ class ConvertibleBondAnalyzer:
         # Y轴样式优化
         fig.update_yaxes(
             title_text="价格",
-            title_font=dict(size=11, family='SimHei', color='#333'),
-            tickfont=dict(size=9, family='SimHei'),
+            title_font=dict(size=11, family='Arial', color='#333'),
+            tickfont=dict(size=9, family='Arial'),
             gridcolor='rgba(200,200,200,0.2)',
             row=1, col=1
         )
         fig.update_yaxes(
             title_text="成交量",
-            title_font=dict(size=11, family='SimHei', color='#333'),
-            tickfont=dict(size=9, family='SimHei'),
+            title_font=dict(size=11, family='Arial', color='#333'),
+            tickfont=dict(size=9, family='Arial'),
             gridcolor='rgba(200,200,200,0.2)',
             row=2, col=1
         )
         fig.update_yaxes(
             title_text="RSI",
-            title_font=dict(size=11, family='SimHei', color='#333'),
-            tickfont=dict(size=9, family='SimHei'),
+            title_font=dict(size=11, family='Arial', color='#333'),
+            tickfont=dict(size=9, family='Arial'),
             gridcolor='rgba(200,200,200,0.2)',
             range=[0, 100],  # RSI固定0-100范围，更直观
             row=3, col=1
