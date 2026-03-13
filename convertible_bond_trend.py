@@ -325,13 +325,13 @@ class ConvertibleBondAnalyzer:
         # 对非交易日去除处理
         df = df.reset_index(drop=True).copy()
         df = df.sort_values(by='date').reset_index(drop=True)
-
-        x_axis = list(range(len(df)))  # 用整数序列做x轴，使K线紧凑展示
+    
+        # ========== 核心修复：将x_axis转为numpy数组，支持布尔掩码切片 ==========
+        x_axis = np.arange(len(df))  # 用numpy数组替代列表，支持布尔索引
         date_labels = df['date']
-
-        # ========== 核心优化：同花顺风格配色与样式配置 ==========
-        # 同花顺经典配色：阳线红（空心）、阴线绿（实心）
-        up_color = '#FF4500'    # 阳线主色（橙红，更接近同花顺）
+    
+        # ========== 同花顺风格配色与样式配置 ==========
+        up_color = '#FF4500'    # 阳线主色（橙红）
         down_color = '#008000'  # 阴线主色（翠绿）
         ma_colors = {
             'ma5': '#F7A35C',   # 5日均线（橙色）
@@ -339,30 +339,30 @@ class ConvertibleBondAnalyzer:
             'ma20': '#4ECDC4',  # 20日均线（青绿色）
             'ma30': '#90EE90'   # 30日均线（浅绿色）
         }
-
-        # 创建子图（修复title_font参数错误，优化行高比例）
+    
+        # 创建子图（修复title_font参数错误）
         fig = make_subplots(
             rows=3, cols=1,
-            vertical_spacing=0.02,  # 减小垂直间距，更紧凑
-            row_heights=[0.65, 0.15, 0.2],  # 优化行高占比
-            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')  # 移除不兼容的title_font参数
+            vertical_spacing=0.02,
+            row_heights=[0.65, 0.15, 0.2],
+            subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')
         )
-
-        # ========== 统一设置子图标题样式（替代原title_font） ==========
+    
+        # 设置子图标题样式（替代不兼容的title_font）
         for i, title in enumerate([f'{bond_name} K线图', '成交量', 'RSI']):
             fig.layout.annotations[i].update(
-                font=dict(size=16, family='Arial', color='#333333')  # 改用Arial兼容所有环境
+                font=dict(size=16, family='Arial', color='#333333')
             )
         
-        # ========== 同花顺风格K线绘制（核心修改） ==========
-        # 拆分阳线/阴线数据，分别设置样式
+        # ========== 修复K线绘制逻辑：numpy数组支持布尔切片 ==========
+        # 生成阳线/阴线掩码
         up_mask = df['close'] >= df['open']
         down_mask = df['close'] < df['open']
-
-        # 添加阳线
+    
+        # 添加阳线（使用numpy数组的布尔索引）
         fig.add_trace(
             go.Candlestick(
-                x=x_axis[up_mask],
+                x=x_axis[up_mask],  # 现在支持布尔切片
                 open=df.loc[up_mask, 'open'],
                 high=df.loc[up_mask, 'high'],
                 low=df.loc[up_mask, 'low'],
@@ -370,107 +370,108 @@ class ConvertibleBondAnalyzer:
                 name='阳线',
                 increasing_line_color=up_color,
                 increasing_fillcolor='rgba(0,0,0,0)',  # 阳线空心
-                increasing_line_width=1.5,            # 阳线边框加粗
+                increasing_line_width=1.5,
                 showlegend=False
             ),
             row=1, col=1
         )
-
-        # 添加阴线
+    
+        # 添加阴线（使用numpy数组的布尔索引）
         fig.add_trace(
             go.Candlestick(
-                x=x_axis[down_mask],
+                x=x_axis[down_mask],  # 现在支持布尔切片
                 open=df.loc[down_mask, 'open'],
                 high=df.loc[down_mask, 'high'],
                 low=df.loc[down_mask, 'low'],
                 close=df.loc[down_mask, 'close'],
                 name='阴线',
                 decreasing_line_color=down_color,
-                decreasing_fillcolor=down_color,     # 阴线实心填充
-                decreasing_line_width=1.5,           # 阴线边框加粗
+                decreasing_fillcolor=down_color,     # 阴线实心
+                decreasing_line_width=1.5,
                 showlegend=False
             ),
             row=1, col=1
         )
         
-        # ========== 均线优化（更贴合同花顺样式） ==========
+        # ========== 均线绘制 ==========
         for ma, color in ma_colors.items():
             if ma in df.columns:
                 fig.add_trace(
                     go.Scatter(
-                        x=x_axis,
+                        x=x_axis,  # numpy数组直接使用
                         y=df[ma],
                         name=ma.upper(),
-                        line=dict(color=color, width=1.2),  # 均线粗细优化
-                        opacity=0.8,                        # 透明度调整，避免遮挡K线
+                        line=dict(color=color, width=1.2),
+                        opacity=0.8,
                         showlegend=True
                     ),
                     row=1, col=1
                 )
         
-        # ========== 成交量优化（同步同花顺配色） ==========
+        # ========== 成交量绘制 ==========
         colors_volume = [up_color if row['close'] >= row['open'] else down_color 
                         for idx, row in df.iterrows()]
         fig.add_trace(
             go.Bar(
-                x=x_axis,
+                x=x_axis,  # numpy数组直接使用
                 y=df['volume'],
                 name='成交量',
                 marker_color=colors_volume,
-                opacity=0.7,  # 成交量透明度优化
+                opacity=0.7,
                 showlegend=False
             ),
             row=2, col=1
         )
         
-        # ========== RSI指标优化（样式更清晰） ==========
+        # ========== RSI指标绘制 ==========
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        # 处理除零错误（避免RSI计算报错）
+        loss = loss.replace(0, 1e-8)
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
         
         fig.add_trace(
             go.Scatter(
-                x=x_axis,
+                x=x_axis,  # numpy数组直接使用
                 y=rsi,
                 name='RSI',
-                line=dict(color='#800080', width=1.8),  # RSI线条加粗，紫色更醒目
-                fill='tonexty',                         # 填充RSI下方区域，更直观
+                line=dict(color='#800080', width=1.8),
+                fill='tonexty',
                 fillcolor='rgba(128, 0, 128, 0.1)',
                 showlegend=False
             ),
             row=3, col=1
         )
-
-        # RSI参考线优化（更清晰的样式）
+    
+        # RSI参考线
         fig.add_hline(y=70, line_dash="dash", line_color="#FF0000", line_width=1, opacity=0.7, row=3, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="#00FF00", line_width=1, opacity=0.7, row=3, col=1)
         fig.add_hline(y=50, line_dash="dot", line_color="#888888", line_width=1, opacity=0.5, row=3, col=1)
         
-        # ========== 整体布局优化（同花顺风格） ==========
+        # ========== 布局优化 ==========
         fig.update_layout(
-            height=850,  # 适度增高，提升视觉体验
+            height=850,
             showlegend=True,
             legend=dict(
-                orientation='h',       # 图例水平排列
-                yanchor='bottom',      # 图例靠下
-                y=1.02,                # 图例位置在K线图上方
-                xanchor='right',       # 图例右对齐
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='right',
                 x=1,
-                font=dict(size=10, family='Arial')  # 改用Arial兼容所有环境
+                font=dict(size=10, family='Arial')
             ),
-            xaxis_rangeslider_visible=False,  # 隐藏range slider，更简洁
-            hovermode='x unified',            # 统一x轴悬停提示
-            template='plotly_white',          # 白色背景，贴合同花顺
-            plot_bgcolor='rgba(245,245,245,0.9)',  # 浅灰背景，减少刺眼
+            xaxis_rangeslider_visible=False,
+            hovermode='x unified',
+            template='plotly_white',
+            plot_bgcolor='rgba(245,245,245,0.9)',
             paper_bgcolor='white',
-            margin=dict(l=50, r=30, t=60, b=40)  # 边距优化
+            margin=dict(l=50, r=30, t=60, b=40)
         )
-
+    
         # ========== X/Y轴样式优化 ==========
-        # 统一设置X轴（日期）样式
-        tick_interval = max(len(x_axis)//12, 1)  # 优化刻度间隔，避免拥挤
+        tick_interval = max(len(x_axis)//12, 1)
         for i in range(1, 4):
             fig.update_xaxes(
                 ticks="outside",
@@ -479,14 +480,14 @@ class ConvertibleBondAnalyzer:
                     date_labels.iloc[idx].strftime('%Y-%m-%d') 
                     if hasattr(date_labels.iloc[idx], 'strftime') 
                     else str(date_labels.iloc[idx]) 
-                    for idx in x_axis[::tick_interval]
+                    for idx in range(len(x_axis))[::tick_interval]
                 ],
-                tickfont=dict(size=9, family='Arial'),  # 改用Arial兼容所有环境
-                gridcolor='rgba(200,200,200,0.2)',       # 网格线浅灰，不干扰
+                tickfont=dict(size=9, family='Arial'),
+                gridcolor='rgba(200,200,200,0.2)',
                 row=i, col=1
             )
         
-        # Y轴样式优化
+        # Y轴设置
         fig.update_yaxes(
             title_text="价格",
             title_font=dict(size=11, family='Arial', color='#333'),
@@ -506,7 +507,7 @@ class ConvertibleBondAnalyzer:
             title_font=dict(size=11, family='Arial', color='#333'),
             tickfont=dict(size=9, family='Arial'),
             gridcolor='rgba(200,200,200,0.2)',
-            range=[0, 100],  # RSI固定0-100范围，更直观
+            range=[0, 100],
             row=3, col=1
         )
         
