@@ -321,7 +321,7 @@ class ConvertibleBondAnalyzer:
     
 
     def plot_kline_with_signals(self, df, bond_name, features):
-        """专业级同花顺风格K线图（兼容所有Plotly版本，无报错）"""
+        """终极兼容版：同花顺风格K线图（适配所有Plotly版本，无hover解析错误）"""
         # 数据预处理+空值保护
         df = df.reset_index(drop=True).copy()
         df = df.sort_values(by='date').reset_index(drop=True)
@@ -334,11 +334,15 @@ class ConvertibleBondAnalyzer:
             )
             return fig
     
-        # 生成支持布尔索引的x轴（核心修复）
+        # 生成支持布尔索引的x轴
         x_axis = np.arange(len(df))
-        date_labels = df['date'].dt.strftime('%Y-%m-%d') if pd.api.types.is_datetime64_any_dtype(df['date']) else df['date'].astype(str)
+        # 统一日期格式为字符串（避免hover解析异常）
+        if pd.api.types.is_datetime64_any_dtype(df['date']):
+            date_labels = df['date'].dt.strftime('%Y-%m-%d').tolist()
+        else:
+            date_labels = df['date'].astype(str).tolist()
     
-        # ========== 兼容版配色方案 ==========
+        # ========== 基础配色方案 ==========
         up_color = '#E62E2E'          # 阳线主色
         up_border_color = '#C02020'   # 阳线边框
         down_color = '#00965E'        # 阴线主色
@@ -349,7 +353,7 @@ class ConvertibleBondAnalyzer:
             'ma30': '#00CC66'    # 30日均线
         }
     
-        # 创建子图（仅保留兼容参数）
+        # 创建子图（仅保留基础参数）
         fig = make_subplots(
             rows=3, cols=1,
             vertical_spacing=0.015,
@@ -357,19 +361,18 @@ class ConvertibleBondAnalyzer:
             subplot_titles=(f'{bond_name} K线图', '成交量', 'RSI')
         )
     
-        # 优化子图标题（仅保留兼容样式）
-        for i, title in enumerate([f'{bond_name} K线图', '成交量', 'RSI']):
-            if i < len(fig.layout.annotations):
-                fig.layout.annotations[i].update(
-                    font=dict(size=16, family='Arial', color='#2C3E50', weight='bold'),
-                    bgcolor='rgba(255,255,255,0.8)'
-                )
+        # 优化子图标题（兼容旧版）
+        for i in range(len(fig.layout.annotations)):
+            fig.layout.annotations[i].update(
+                font=dict(size=16, family='Arial', color='#2C3E50', weight='bold'),
+                bgcolor='rgba(255,255,255,0.8)'
+            )
         
-        # ========== 核心：兼容版K线样式（移除所有新版参数） ==========
+        # ========== K线绘制（移除所有hover模板，改用全局hover） ==========
         up_mask = df['close'] >= df['open']
         down_mask = df['close'] < df['open']
     
-        # 阳线：仅保留基础样式（旧版Plotly兼容）
+        # 阳线（移除自定义hovertemplate）
         fig.add_trace(
             go.Candlestick(
                 x=x_axis[up_mask],
@@ -380,16 +383,13 @@ class ConvertibleBondAnalyzer:
                 name='阳线',
                 increasing_line_color=up_border_color,
                 increasing_fillcolor='rgba(255,255,255,0)',  # 空心
-                increasing_line_width=2,                     # 加粗边框
-                showlegend=False,
-                # 修复hover模板：不用%{x}，改用自定义数据
-                customdata=np.array([date_labels.iloc[i] for i in np.where(up_mask)[0]]),
-                hovertemplate='日期: %{customdata}<br>开盘: %{open}<br>最高: %{high}<br>最低: %{low}<br>收盘: %{close}<extra></extra>'
+                increasing_line_width=2,
+                showlegend=False
             ),
             row=1, col=1
         )
     
-        # 阴线：仅保留基础样式（旧版Plotly兼容）
+        # 阴线（移除自定义hovertemplate）
         fig.add_trace(
             go.Candlestick(
                 x=x_axis[down_mask],
@@ -401,34 +401,30 @@ class ConvertibleBondAnalyzer:
                 decreasing_line_color=down_color,
                 decreasing_fillcolor=down_color,             # 实心
                 decreasing_line_width=1.8,
-                showlegend=False,
-                # 修复hover模板
-                customdata=np.array([date_labels.iloc[i] for i in np.where(down_mask)[0]]),
-                hovertemplate='日期: %{customdata}<br>开盘: %{open}<br>最高: %{high}<br>最低: %{low}<br>收盘: %{close}<extra></extra>'
+                showlegend=False
             ),
             row=1, col=1
         )
         
-        # ========== 均线优化（移除平滑/渐变等新版参数） ==========
+        # ========== 均线绘制（移除f-string+hovertemplate） ==========
         for ma, color in ma_colors.items():
             if ma in df.columns:
                 fig.add_trace(
                     go.Scatter(
                         x=x_axis,
                         y=df[ma],
-                        name=ma.upper(),
+                        name=ma.upper(),  # 仅保留名称，hover自动显示
                         line=dict(
                             color=color,
                             width=1.8
                         ),
                         opacity=0.85,
-                        showlegend=True,
-                        hovertemplate=f'{ma.upper()}: %{y}<extra></extra>'
+                        showlegend=True
                     ),
                     row=1, col=1
                 )
         
-        # ========== 成交量优化（仅保留兼容样式） ==========
+        # ========== 成交量绘制（简化hover） ==========
         volume_colors = [up_color if row['close'] >= row['open'] else down_color 
                         for idx, row in df.iterrows()]
         
@@ -442,13 +438,12 @@ class ConvertibleBondAnalyzer:
                     line=dict(width=0.5, color='#E0E0E0')
                 ),
                 opacity=0.8,
-                showlegend=False,
-                hovertemplate='成交量: %{y}<extra></extra>'
+                showlegend=False
             ),
             row=2, col=1
         )
         
-        # ========== RSI优化（仅保留兼容参数） ==========
+        # ========== RSI绘制（简化hover） ==========
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -456,7 +451,6 @@ class ConvertibleBondAnalyzer:
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
     
-        # RSI主线条（移除平滑参数）
         fig.add_trace(
             go.Scatter(
                 x=x_axis,
@@ -468,13 +462,12 @@ class ConvertibleBondAnalyzer:
                 ),
                 fill='tonexty',
                 fillcolor='rgba(128, 0, 128, 0.15)',
-                showlegend=False,
-                hovertemplate='RSI: %{y}<extra></extra>'
+                showlegend=False
             ),
             row=3, col=1
         )
     
-        # RSI阈值背景（兼容版）
+        # RSI阈值背景
         fig.add_hrect(
             y0=70, y1=100,
             fillcolor='rgba(230, 46, 46, 0.1)',
@@ -495,7 +488,7 @@ class ConvertibleBondAnalyzer:
         fig.add_hline(y=30, line_dash="dash", line_color="#00965E", line_width=1.2, opacity=0.8, row=3, col=1)
         fig.add_hline(y=50, line_dash="dot", line_color="#888888", line_width=1, opacity=0.6, row=3, col=1)
         
-        # ========== 全局布局（仅保留兼容参数） ==========
+        # ========== 全局布局（核心：用默认hover替代自定义模板） ==========
         fig.update_layout(
             height=900,
             showlegend=True,
@@ -511,6 +504,7 @@ class ConvertibleBondAnalyzer:
                 borderwidth=1
             ),
             xaxis_rangeslider_visible=False,
+            # 关键：使用全局统一hover，避免自定义模板解析错误
             hovermode='x unified',
             hoverlabel=dict(
                 bgcolor='rgba(255,255,255,0.95)',
@@ -524,15 +518,18 @@ class ConvertibleBondAnalyzer:
             font=dict(family='Arial', color='#2C3E50')
         )
     
-        # ========== X/Y轴优化（兼容版） ==========
+        # ========== X/Y轴优化（修复日期标签） ==========
         tick_interval = max(len(x_axis)//15, 1) if len(x_axis) > 15 else 1
+        tick_indices = list(range(len(x_axis)))[::tick_interval]
+        tick_texts = [date_labels[idx] for idx in tick_indices]
+        
         for i in range(1, 4):
             fig.update_xaxes(
                 ticks="outside",
                 ticklen=6,
                 tickwidth=1.2,
                 tickvals=x_axis[::tick_interval],
-                ticktext=[date_labels.iloc[idx] for idx in range(len(x_axis))[::tick_interval]],
+                ticktext=tick_texts,
                 tickfont=dict(size=10, family='Arial', color='#666666'),
                 gridcolor='rgba(220,220,220,0.3)',
                 gridwidth=0.8,
